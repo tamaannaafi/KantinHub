@@ -1,6 +1,4 @@
 <?php
-// POST api/auth.php  { action: "login", username, password }  -> { is_admin: true/false }
-// POST api/auth.php  { action: "logout" }
 require __DIR__ . '/bootstrap.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -18,7 +16,6 @@ if ($action === 'login') {
         fail('Username tidak boleh kosong.');
     }
 
-    // Login admin: password dicek DI SERVER, bukan di browser
     if ($username === ADMIN_USERNAME) {
         if (!password_verify($password, ADMIN_PASSWORD_HASH)) {
             fail('Password admin salah.', 401);
@@ -28,7 +25,6 @@ if ($action === 'login') {
         respond(['is_admin' => true]);
     }
 
-    // User biasa: sama seperti sebelumnya, cukup isi nama
     $_SESSION['is_admin'] = false;
     respond(['is_admin' => false]);
 }

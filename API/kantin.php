@@ -1,5 +1,4 @@
 <?php
-// GET api/kantin.php  ->  daftar semua kantin
 require __DIR__ . '/bootstrap.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {

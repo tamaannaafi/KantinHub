@@ -1,4 +1,3 @@
-// Folder API PHP (relatif terhadap index.html)
 const API_URL = "api";
 
 let cart = [];
@@ -9,11 +8,6 @@ let activeKantinId = null;
 let dataKantin = [];
 let dataMenu = [];
 
-// ============================================================
-// HELPER: berkomunikasi dengan PHP
-// ============================================================
-
-// Mencegah teks buatan user dibaca browser sebagai HTML/script (serangan XSS)
 function escapeHTML(str) {
   return String(str ?? "").replace(
     /[&<>"']/g,
@@ -22,11 +16,6 @@ function escapeHTML(str) {
   );
 }
 
-// Kirim request ke api/<file>.php lalu kembalikan hasil JSON-nya.
-// Kalau server membalas error, fungsi ini melempar Error -> tangkap dengan try/catch.
-//   api("kantin")                                         -> GET  api/kantin.php
-//   api("menu", { params: { kantin_id: 1 } })             -> GET  api/menu.php?kantin_id=1
-//   api("reviews", { method: "POST", body: { ... } })     -> POST api/reviews.php
 async function api(file, { method = "GET", params = null, body = null } = {}) {
   let url = `${API_URL}/${file}.php`;
   if (params) url += "?" + new URLSearchParams(params).toString();
@@ -43,10 +32,8 @@ async function api(file, { method = "GET", params = null, body = null } = {}) {
   try {
     data = await res.json();
   } catch (e) {
-    // balasan bukan JSON (biasanya PHP tidak dijalankan)
   }
 
-  // Sesi admin habis -> kembalikan tampilan ke mode user biasa
   if (res.status === 403) {
     isAdmin = false;
     localStorage.removeItem("kantinHubAdmin");
@@ -342,7 +329,6 @@ function setupLoginForm() {
 
     if (!username) return;
 
-    // Password admin sekarang dicek oleh PHP (api/auth.php), bukan di browser lagi
     try {
       const res = await api("auth", {
         method: "POST",
@@ -485,7 +471,6 @@ function setQty(id, newQty) {
   renderCheckout();
 }
 
-// Ambil Riwayat dari database (PHP)
 async function fetchHistory() {
   const container = document.getElementById("history-list");
   if (!activeUser) {
@@ -525,7 +510,6 @@ async function fetchHistory() {
     : "<p class='text-center w-100 text-muted mt-4'>Belum ada pesanan.</p>";
 }
 
-// 9. FUNGSI PANEL ADMIN
 async function fetchAdminOrders() {
   const container = document.getElementById("admin-orders-list");
   container.innerHTML = "Memuat...";

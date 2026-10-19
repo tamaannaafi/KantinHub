@@ -1,6 +1,4 @@
 <?php
-// GET  api/reviews.php  -> 5 ulasan terbaru
-// POST api/reviews.php  -> kirim ulasan baru  { username, review_text }
 require __DIR__ . '/bootstrap.php';
 
 $method = $_SERVER['REQUEST_METHOD'];

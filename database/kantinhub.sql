@@ -1,21 +1,14 @@
--- ============================================================
--- KantinHub - Database MySQL / MariaDB (XAMPP)
--- Cara pakai: phpMyAdmin -> tab "Import" -> pilih file ini -> Go
--- ============================================================
-
 CREATE DATABASE IF NOT EXISTS kantinhub
   CHARACTER SET utf8mb4
   COLLATE utf8mb4_unicode_ci;
 
 USE kantinhub;
 
--- Hapus tabel lama (urutan: anak dulu, baru induk, karena ada foreign key)
 DROP TABLE IF EXISTS reviews;
 DROP TABLE IF EXISTS orders;
 DROP TABLE IF EXISTS menu;
 DROP TABLE IF EXISTS kantin;
 
--- utf8mb4 wajib supaya emoji di kolom icon (🫓 🍡 🍢) tersimpan dengan benar
 CREATE TABLE kantin (
   id   INT AUTO_INCREMENT PRIMARY KEY,
   nama VARCHAR(100) NOT NULL,
@@ -51,9 +44,6 @@ CREATE TABLE reviews (
   created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ------------------------------------------------------------
--- Data awal
--- ------------------------------------------------------------
 INSERT INTO kantin (id, nama, icon) VALUES
   (1, 'USMAN 1', '🫓'),
   (2, 'USMAN 2', '🍡'),
@@ -63,27 +53,21 @@ INSERT INTO kantin (id, nama, icon) VALUES
   (6, 'USMAN 8', '🍗');
 
 INSERT INTO menu (kantin_id, nama, harga, img) VALUES
-  -- USMAN 1
   (1, 'Pentol', 5000, 'https://images.unsplash.com/photo-1596649281278-6bd3914a1c6a?w=400'),
   (1, 'Bakpao', 2500, 'https://images.unsplash.com/photo-1627916531398-ff2f1cf1d2ce?w=400'),
   (1, 'Gorengan', 1000, 'https://images.unsplash.com/photo-1628840042765-356cda07504e?w=400'),
-  -- USMAN 2
   (2, 'Pentol', 5000, 'https://images.unsplash.com/photo-1596649281278-6bd3914a1c6a?w=400'),
   (2, 'Bakpao', 2500, 'https://images.unsplash.com/photo-1627916531398-ff2f1cf1d2ce?w=400'),
   (2, 'Gorengan', 1000, 'https://images.unsplash.com/photo-1628840042765-356cda07504e?w=400'),
-  -- USMAN 3
   (3, 'Tempura', 1000, 'https://images.unsplash.com/photo-1581184953963-d159747d1286?w=400'),
   (3, 'Gorengan', 1000, 'https://images.unsplash.com/photo-1628840042765-356cda07504e?w=400'),
-  -- USMAN 4
   (4, 'Es Sachet', 3000, 'https://images.unsplash.com/photo-1556679343-c7306c1976bc?w=400'),
   (4, 'Le Minerale', 3000, 'https://images.unsplash.com/photo-1523362628745-0c100150b504?w=400'),
   (4, 'Nabati', 2000, 'https://images.unsplash.com/photo-1621939514649-280e2ee25f60?w=400'),
   (4, 'Pop Mie', 6000, 'https://images.unsplash.com/photo-1612929633738-8fe44f7ec841?w=400'),
   (4, 'Mie Gelas', 2500, 'https://images.unsplash.com/photo-1552611052-33e04de081de?w=400'),
-  -- USMAN 7
   (5, 'Tempura', 1000, 'https://images.unsplash.com/photo-1581184953963-d159747d1286?w=400'),
   (5, 'Nasi Goreng', 1000, 'https://images.unsplash.com/photo-1512058564366-18510be2db19?w=400'),
-  -- USMAN 8
   (6, 'Nasi Geprek', 7000, 'https://images.unsplash.com/photo-1606080206121-aee43df79768?w=400'),
   (6, 'Donat', 3000, 'https://images.unsplash.com/photo-1551024601-bec78aea704b?w=400'),
   (6, 'Risol', 3000, 'https://images.unsplash.com/photo-1625938146369-adc83368bda7?w=400'),

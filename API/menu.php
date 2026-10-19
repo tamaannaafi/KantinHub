@@ -1,12 +1,8 @@
 <?php
-// GET  api/menu.php?kantin_id=1  -> menu milik satu kantin   (publik)
-// GET  api/menu.php?all=1        -> semua menu + nama kantin (admin)
-// POST api/menu.php              -> tambah / ubah foto / hapus menu (admin)
 require __DIR__ . '/bootstrap.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
 
-// ---------- BACA DATA ----------
 if ($method === 'GET') {
     if (isset($_GET['all'])) {
         require_admin();
@@ -24,7 +20,6 @@ if ($method === 'GET') {
     respond($stmt->fetchAll());
 }
 
-// ---------- UBAH DATA (khusus admin) ----------
 if ($method !== 'POST') {
     fail('Method tidak diizinkan.', 405);
 }

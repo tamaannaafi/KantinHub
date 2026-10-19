@@ -1,10 +1,6 @@
 <?php
-// GET  api/orders.php?username=Tama  -> riwayat pesanan satu user
-// GET  api/orders.php?all=1          -> semua pesanan + nama kantin (admin)
-// POST api/orders.php                -> action "create" (user) / "complete" (admin)
 require __DIR__ . '/bootstrap.php';
 
-// Pastikan tipe data konsisten: angka tetap angka, is_completed jadi true/false
 function shape_order(array $o): array
 {
     $o['id']           = (int)$o['id'];
@@ -16,7 +12,6 @@ function shape_order(array $o): array
 
 $method = $_SERVER['REQUEST_METHOD'];
 
-// ---------- BACA DATA ----------
 if ($method === 'GET') {
     if (isset($_GET['all'])) {
         require_admin();
@@ -37,7 +32,6 @@ if ($method === 'GET') {
     respond(with_iso_dates(array_map('shape_order', $rows)));
 }
 
-// ---------- UBAH DATA ----------
 if ($method !== 'POST') {
     fail('Method tidak diizinkan.', 405);
 }
@@ -45,7 +39,6 @@ if ($method !== 'POST') {
 $in     = input();
 $action = $in['action'] ?? '';
 
-// Buat pesanan baru (boleh dilakukan user biasa)
 if ($action === 'create') {
     $kantinId = (int)($in['kantin_id'] ?? 0);
     $username = trim($in['username'] ?? '');
@@ -76,7 +69,6 @@ if ($action === 'create') {
     respond(['id' => (int)$pdo->lastInsertId()], 201);
 }
 
-// Tandai pesanan selesai (khusus admin)
 if ($action === 'complete') {
     require_admin();
     $id = (int)($in['id'] ?? 0);
