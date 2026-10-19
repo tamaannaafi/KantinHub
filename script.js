@@ -1,8 +1,5 @@
-const SUPABASE_URL = "https://ciiqedrfocqzhhhsbtbb.supabase.co";
-const SUPABASE_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNpaXFlZHJmb2NxemhoaHNidGJiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc1MTA4MzYsImV4cCI6MjA5MzA4NjgzNn0.jaPVyYSA7XXEISY41ieIKXQkRwZBcWndBJiqfZnzKqU";
-const { createClient } = supabase;
-const _supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+// Folder API PHP (relatif terhadap index.html)
+const API_URL = "api";
 
 let cart = [];
 let activeUser = localStorage.getItem("kantinHubUser") || null;
@@ -11,6 +8,59 @@ let activeKantinId = null;
 
 let dataKantin = [];
 let dataMenu = [];
+
+// ============================================================
+// HELPER: berkomunikasi dengan PHP
+// ============================================================
+
+// Mencegah teks buatan user dibaca browser sebagai HTML/script (serangan XSS)
+function escapeHTML(str) {
+  return String(str ?? "").replace(
+    /[&<>"']/g,
+    (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
+  );
+}
+
+// Kirim request ke api/<file>.php lalu kembalikan hasil JSON-nya.
+// Kalau server membalas error, fungsi ini melempar Error -> tangkap dengan try/catch.
+//   api("kantin")                                         -> GET  api/kantin.php
+//   api("menu", { params: { kantin_id: 1 } })             -> GET  api/menu.php?kantin_id=1
+//   api("reviews", { method: "POST", body: { ... } })     -> POST api/reviews.php
+async function api(file, { method = "GET", params = null, body = null } = {}) {
+  let url = `${API_URL}/${file}.php`;
+  if (params) url += "?" + new URLSearchParams(params).toString();
+
+  const options = { method };
+  if (body) {
+    options.headers = { "Content-Type": "application/json" };
+    options.body = JSON.stringify(body);
+  }
+
+  const res = await fetch(url, options);
+
+  let data = null;
+  try {
+    data = await res.json();
+  } catch (e) {
+    // balasan bukan JSON (biasanya PHP tidak dijalankan)
+  }
+
+  // Sesi admin habis -> kembalikan tampilan ke mode user biasa
+  if (res.status === 403) {
+    isAdmin = false;
+    localStorage.removeItem("kantinHubAdmin");
+    updateAuthUI();
+  }
+
+  if (!res.ok || data === null) {
+    throw new Error(
+      (data && data.error) ||
+        `Server error (${res.status}). Pastikan Apache & MySQL XAMPP menyala dan halaman dibuka lewat http://localhost/..., bukan klik file langsung.`,
+    );
+  }
+  return data;
+}
 
 document.addEventListener("DOMContentLoaded", () => {
   updateAuthUI();
@@ -50,18 +100,12 @@ async function fetchKantin() {
   container.innerHTML =
     '<div class="text-center w-100 my-4"><div class="spinner-border text-warning" role="status"></div><p class="mt-2 text-muted">Memuat kantin...</p></div>';
 
-  const { data, error } = await _supabase
-    .from("kantin")
-    .select("*")
-    .order("id", { ascending: true });
-
-  if (error) {
-    container.innerHTML = `<p class="text-danger text-center w-100">Gagal memuat daftar kantin: ${error.message}</p>`;
-    return;
+  try {
+    dataKantin = await api("kantin");
+    renderKantin();
+  } catch (err) {
+    container.innerHTML = `<p class="text-danger text-center w-100">Gagal memuat daftar kantin: ${escapeHTML(err.message)}</p>`;
   }
-
-  dataKantin = data;
-  renderKantin();
 }
 
 async function fetchMenu(kantinId) {
@@ -69,30 +113,23 @@ async function fetchMenu(kantinId) {
   container.innerHTML =
     '<div class="text-center w-100 my-4"><div class="spinner-border text-warning" role="status"></div><p class="mt-2 text-muted">Memuat menu...</p></div>';
 
-  const { data, error } = await _supabase
-    .from("menu")
-    .select("*")
-    .eq("kantin_id", kantinId);
-
-  if (error) {
-    container.innerHTML = `<p class="text-danger text-center w-100">Gagal memuat menu: ${error.message}</p>`;
-    return;
+  try {
+    dataMenu = await api("menu", { params: { kantin_id: kantinId } });
+    renderMenu();
+  } catch (err) {
+    container.innerHTML = `<p class="text-danger text-center w-100">Gagal memuat menu: ${escapeHTML(err.message)}</p>`;
   }
-
-  dataMenu = data;
-  renderMenu();
 }
 
 async function fetchReviews() {
   const container = document.getElementById("reviews-list");
 
-  const { data, error } = await _supabase
-    .from("reviews")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(5);
-
-  if (error || !data) return;
+  let data;
+  try {
+    data = await api("reviews");
+  } catch (err) {
+    return;
+  }
 
   if (data.length > 0) {
     container.innerHTML = data
@@ -100,10 +137,10 @@ async function fetchReviews() {
         (r) => `
       <div class="review-item mb-3 p-2 border-bottom">
         <div class="d-flex justify-content-between align-items-center mb-1">
-          <span class="fw-bold small">${r.username}</span>
+          <span class="fw-bold small">${escapeHTML(r.username)}</span>
           <span class="text-muted" style="font-size: 0.70rem;">${new Date(r.created_at).toLocaleDateString()}</span>
         </div>
-        <p class="small text-muted mb-0">${r.review_text}</p>
+        <p class="small text-muted mb-0">${escapeHTML(r.review_text)}</p>
       </div>
     `,
       )
@@ -126,15 +163,15 @@ async function addReview() {
   btn.disabled = true;
   btn.innerText = "Mengirim...";
 
-  const { data, error } = await _supabase
-    .from("reviews")
-    .insert([{ username: nameInput, review_text: textInput }]);
-
-  if (!error) {
+  try {
+    await api("reviews", {
+      method: "POST",
+      body: { username: nameInput, review_text: textInput },
+    });
     document.getElementById("reviewText").value = "";
     fetchReviews();
-  } else {
-    alert("Gagal mengirim ulasan: " + error.message);
+  } catch (err) {
+    alert("Gagal mengirim ulasan: " + err.message);
   }
 
   btn.disabled = false;
@@ -270,13 +307,13 @@ async function confirmPayment() {
     total_price: totalHarga,
     payment_method: payMethod,
     note: document.getElementById("orderNote").value,
-    created_at: new Date().toISOString(),
   };
 
   try {
-    const { data, error } = await _supabase.from("orders").insert([payload]);
-
-    if (error) throw error;
+    await api("orders", {
+      method: "POST",
+      body: { action: "create", ...payload },
+    });
 
     cart = [];
     document.getElementById("orderNote").value = "";
@@ -285,11 +322,11 @@ async function confirmPayment() {
     new bootstrap.Modal(document.getElementById("successModal")).show();
     showSection("home");
   } catch (err) {
-    console.error("Supabase Error:", err.message);
+    console.error("API Error:", err.message);
     alert(
       "Gagal mengirim pesanan: " +
         err.message +
-        "\n\nPastikan tabel 'orders' sudah ada di Supabase dan RLS dimatikan.",
+        "\n\nPastikan Apache dan MySQL di XAMPP sedang menyala.",
     );
   } finally {
     btn.innerText = originalText;
@@ -298,19 +335,31 @@ async function confirmPayment() {
 }
 
 function setupLoginForm() {
-  document.getElementById("loginForm").onsubmit = (e) => {
+  document.getElementById("loginForm").onsubmit = async (e) => {
     e.preventDefault();
-    activeUser = document.getElementById("loginUser").value;
+    const username = document.getElementById("loginUser").value.trim();
     const pass = document.getElementById("loginPass").value;
 
-    if (activeUser === "admin" && pass === "@dm1NC1huyy67") {
-      isAdmin = true;
-      localStorage.setItem("kantinHubAdmin", "true");
-    } else {
-      isAdmin = false;
-      localStorage.removeItem("kantinHubAdmin");
+    if (!username) return;
+
+    // Password admin sekarang dicek oleh PHP (api/auth.php), bukan di browser lagi
+    try {
+      const res = await api("auth", {
+        method: "POST",
+        body: { action: "login", username: username, password: pass },
+      });
+      activeUser = username;
+      isAdmin = res.is_admin;
+    } catch (err) {
+      alert(err.message);
+      return;
     }
 
+    if (isAdmin) {
+      localStorage.setItem("kantinHubAdmin", "true");
+    } else {
+      localStorage.removeItem("kantinHubAdmin");
+    }
     localStorage.setItem("kantinHubUser", activeUser);
 
     updateAuthUI();
@@ -323,6 +372,7 @@ function setupLoginForm() {
 }
 
 function doLogout() {
+  api("auth", { method: "POST", body: { action: "logout" } }).catch(() => {});
   activeUser = null;
   isAdmin = false;
   localStorage.removeItem("kantinHubUser");
@@ -435,7 +485,7 @@ function setQty(id, newQty) {
   renderCheckout();
 }
 
-// Ambil Riwayat dari Supabase
+// Ambil Riwayat dari database (PHP)
 async function fetchHistory() {
   const container = document.getElementById("history-list");
   if (!activeUser) {
@@ -447,14 +497,11 @@ async function fetchHistory() {
   container.innerHTML =
     '<div class="text-center w-100 my-4"><div class="spinner-border text-warning" role="status"></div><p class="mt-2 text-muted">Memuat riwayat...</p></div>';
 
-  const { data, error } = await _supabase
-    .from("orders")
-    .select("*")
-    .eq("username", activeUser)
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    container.innerHTML = `<p class="text-danger text-center mt-4">Gagal memuat riwayat: ${error.message}</p>`;
+  let data;
+  try {
+    data = await api("orders", { params: { username: activeUser } });
+  } catch (err) {
+    container.innerHTML = `<p class="text-danger text-center mt-4">Gagal memuat riwayat: ${escapeHTML(err.message)}</p>`;
     return;
   }
 
@@ -467,8 +514,8 @@ async function fetchHistory() {
         <div class="small fw-bold text-muted">${new Date(h.created_at).toLocaleString()}</div>
         <span class="badge ${h.is_completed ? "bg-success" : "bg-warning text-dark"}">${h.is_completed ? "Selesai" : "Diproses"}</span>
       </div>
-      <div class="mb-2 text-dark">${h.items}</div>
-      ${h.note ? `<div class="small text-muted mb-2"><i class="bi bi-chat-text me-1"></i>Catatan: ${h.note}</div>` : ""}
+      <div class="mb-2 text-dark">${escapeHTML(h.items)}</div>
+      ${h.note ? `<div class="small text-muted mb-2"><i class="bi bi-chat-text me-1"></i>Catatan: ${escapeHTML(h.note)}</div>` : ""}
       <div class="small text-muted mb-2"><i class="bi bi-wallet2 me-1"></i>Metode: ${h.payment_method || "Tunai"}</div>
       <div class="fw-bold text-warning border-top pt-2 mt-1">Total: Rp ${h.total_price.toLocaleString()}</div>
     </div>
@@ -483,13 +530,11 @@ async function fetchAdminOrders() {
   const container = document.getElementById("admin-orders-list");
   container.innerHTML = "Memuat...";
 
-  const { data, error } = await _supabase
-    .from("orders")
-    .select("*, kantin(nama)")
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    container.innerHTML = "Gagal memuat pesanan.";
+  let data;
+  try {
+    data = await api("orders", { params: { all: 1 } });
+  } catch (err) {
+    container.innerHTML = "Gagal memuat pesanan: " + escapeHTML(err.message);
     return;
   }
 
@@ -499,11 +544,11 @@ async function fetchAdminOrders() {
           (o) => `
     <div class="card bg-white shadow-sm mb-3 p-3 rounded-4 border ${o.is_completed ? "border-success border-2" : "border-danger border-2"}">
       <div class="d-flex justify-content-between">
-        <b>${o.username} <span class="badge bg-warning text-dark ms-2">${o.kantin ? o.kantin.nama : "Kantin ID " + o.kantin_id}</span></b>
+        <b>${escapeHTML(o.username)} <span class="badge bg-warning text-dark ms-2">${escapeHTML(o.kantin_nama || "Kantin ID " + o.kantin_id)}</span></b>
         <span class="small">${new Date(o.created_at).toLocaleString()}</span>
       </div>
-      <div class="my-2">${o.items}</div>
-      ${o.note ? `<div class="small text-muted mb-2">Catatan: ${o.note}</div>` : ""}
+      <div class="my-2">${escapeHTML(o.items)}</div>
+      ${o.note ? `<div class="small text-muted mb-2">Catatan: ${escapeHTML(o.note)}</div>` : ""}
       <div class="small text-muted mb-2"><i class="bi bi-wallet2 me-1"></i>Metode: ${o.payment_method || "Tunai"}</div>
       <div class="d-flex justify-content-between align-items-center mt-2 border-top pt-2">
         <div class="text-warning fw-bold">Rp ${o.total_price.toLocaleString()}</div>
@@ -517,13 +562,11 @@ async function fetchAdminOrders() {
 }
 
 async function completeOrder(id) {
-  const { error } = await _supabase
-    .from("orders")
-    .update({ is_completed: true })
-    .eq("id", id);
-  if (error) {
-    console.error("Gagal menyelesaikan pesanan:", error);
-    alert("Gagal memperbarui status. Pastikan tabel ter-update.");
+  try {
+    await api("orders", { method: "POST", body: { action: "complete", id: id } });
+  } catch (err) {
+    console.error("Gagal menyelesaikan pesanan:", err);
+    alert("Gagal memperbarui status: " + err.message);
   }
   fetchAdminOrders();
 }
@@ -532,13 +575,11 @@ async function fetchAdminMenus() {
   const container = document.getElementById("admin-menu-list");
   container.innerHTML = "Memuat menu...";
 
-  const { data: menuData, error: menuErr } = await _supabase
-    .from("menu")
-    .select("*, kantin(nama)")
-    .order("kantin_id", { ascending: true });
-
-  if (menuErr) {
-    container.innerHTML = "Gagal memuat menu.";
+  let menuData;
+  try {
+    menuData = await api("menu", { params: { all: 1 } });
+  } catch (err) {
+    container.innerHTML = "Gagal memuat menu: " + escapeHTML(err.message);
     return;
   }
 
@@ -562,7 +603,7 @@ async function fetchAdminMenus() {
           <img src="${m.img}" width="40" height="40" class="rounded object-fit-cover me-2">
           ${m.nama}
         </td>
-        <td>${m.kantin ? m.kantin.nama : m.kantin_id}</td>
+        <td>${m.kantin_nama || m.kantin_id}</td>
         <td>Rp ${m.harga.toLocaleString()}</td>
         <td>
           <button class="btn btn-sm btn-outline-secondary" onclick="updateMenuPhoto(${m.id})"><i class="bi bi-image"></i></button>
@@ -577,7 +618,7 @@ async function fetchAdminMenus() {
 
   const selectKantin = document.getElementById("newMenuKantin");
   if (selectKantin && selectKantin.options.length <= 1) {
-    const { data: kData } = await _supabase.from("kantin").select("*");
+    const kData = await api("kantin").catch(() => null);
     if (kData) {
       kData.forEach((k) => {
         const opt = document.createElement("option");
@@ -594,7 +635,15 @@ async function updateMenuPhoto(id) {
     "Masukkan URL foto baru (disarankan dari Unsplash/Pexels):",
   );
   if (newUrl) {
-    await _supabase.from("menu").update({ img: newUrl }).eq("id", id);
+    try {
+      await api("menu", {
+        method: "POST",
+        body: { action: "update_photo", id: id, img: newUrl },
+      });
+    } catch (err) {
+      alert("Gagal mengubah foto: " + err.message);
+      return;
+    }
     fetchAdminMenus();
     if (activeKantinId) fetchMenu(activeKantinId);
   }
@@ -602,7 +651,12 @@ async function updateMenuPhoto(id) {
 
 async function deleteMenu(id) {
   if (confirm("Yakin ingin menghapus menu ini?")) {
-    await _supabase.from("menu").delete().eq("id", id);
+    try {
+      await api("menu", { method: "POST", body: { action: "delete", id: id } });
+    } catch (err) {
+      alert("Gagal menghapus menu: " + err.message);
+      return;
+    }
     fetchAdminMenus();
     if (activeKantinId) fetchMenu(activeKantinId);
   }
@@ -619,22 +673,23 @@ async function addNewMenu() {
     return;
   }
 
-  const { error } = await _supabase.from("menu").insert([
-    {
-      kantin_id: kantinId,
-      nama: nama,
-      harga: parseInt(harga),
-      img: img,
-    },
-  ]);
-
-  if (error) {
-    alert("Gagal menambah menu: " + error.message);
-  } else {
+  try {
+    await api("menu", {
+      method: "POST",
+      body: {
+        action: "add",
+        kantin_id: kantinId,
+        nama: nama,
+        harga: parseInt(harga),
+        img: img,
+      },
+    });
     document.getElementById("newMenuName").value = "";
     document.getElementById("newMenuPrice").value = "";
     document.getElementById("newMenuImg").value = "";
     fetchAdminMenus();
     if (activeKantinId == kantinId) fetchMenu(kantinId);
+  } catch (err) {
+    alert("Gagal menambah menu: " + err.message);
   }
 }
